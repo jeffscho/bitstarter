@@ -21,9 +21,11 @@ References:
    - https://developer.mozilla.org/en-US/docs/JSON#JSON_in_Firefox_2
 */
 
+var rest = require('restler');
 var fs = require('fs');
 var program = require('commander');
 var cheerio = require('cheerio');
+var util = require('util');
 var HTMLFILE_DEFAULT = "index.html";
 var CHECKSFILE_DEFAULT = "checks.json";
 
@@ -34,6 +36,25 @@ var assertFileExists = function(infile) {
         process.exit(1); // http://nodejs.org/api/process.html#process_process_exit_code
     }
     return instr;
+};
+
+var buildfn =  function(checksfile) {
+    var response2console = function(result, response) {
+	if(result instanceof Error) {
+	    console.error('Error: ' + util.format(response.message));
+        } else {
+            $ = cheerio.load(result);
+	    var checks = loadChecks(checksfile).sort();
+            var out = {};
+            for(var ii in checks) {
+		var present = $(checks[ii]).length > 0;
+		out[checks[ii]] = present;
+	    }
+	    var outJson = JSON.stringify(out, null, 4);
+	    console.log(outJson); 
+        }
+    }
+    return response2console;
 };
 
 var cheerioHtmlFile = function(htmlfile) {
@@ -65,10 +86,17 @@ if(require.main == module) {
     program
         .option('-f, --file <html_file>', 'Path to index.html', clone(assertFileExists), HTMLFILE_DEFAULT)
         .option('-c, --checks <check_file>', 'Path to checks.json', clone(assertFileExists), CHECKSFILE_DEFAULT)
+        .option('-u, --url <url>', 'url')
         .parse(process.argv);
-    var checkJson = checkHtmlFile(program.file, program.checks);
-    var outJson = JSON.stringify(checkJson, null, 4);
-    console.log(outJson);
+    if(program.url == undefined) {
+	var checkJson = checkHtmlFile(program.file, program.checks);
+	var outJson = JSON.stringify(checkJson, null, 4);
+	console.log(outJson);
+    } else {
+	var response2console = buildfn(program.checks);
+	rest.get(program.url).on('complete', response2console);
+
+    }
 } else {
     exports.checkHtmlFile = checkHtmlFile;
 }
